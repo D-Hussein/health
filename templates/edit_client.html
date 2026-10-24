@@ -1,103 +1,39 @@
 {% extends "base.html" %}
-
-{% block title %}Edit {{ client.name }} - Healthcare System{% endblock %}
-
+{% block title %}Edit {{ client.name }}{% endblock %}
 {% block content %}
-<h2>Edit Client: {{ client.name }}</h2>
-
-<form method="POST">
-    <div class="form-group">
-        <label for="name">Full Name:</label>
-        <input type="text" id="name" name="name" value="{{ client.name }}" required>
+<div class="page-header"><div>
+    <div class="breadcrumb"><a href="{{ url_for('dashboard') }}">Patients</a> / <a href="{{ url_for('client_detail', client_id=client.id) }}">{{ client.name }}</a></div>
+    <h2>Edit patient</h2>
+    <p class="subtitle mono">CPR {{ client.cpr }}</p>
+</div></div>
+<form method="POST" class="card form-card">
+    <div class="grid grid-2" style="gap:16px">
+        <div class="form-group"><label for="name">Full name</label><input type="text" id="name" name="name" value="{{ client.name or '' }}" required></div>
+        {% if current_user.is_admin or current_user.municipality == 'all' %}
+        <div class="form-group"><label for="municipality">Municipality</label><input type="text" id="municipality" name="municipality" value="{{ client.municipality or '' }}"></div>
+        {% endif %}
+        <div class="form-group"><label for="address">Address</label><input type="text" id="address" name="address" value="{{ client.address or '' }}"></div>
+        <div class="form-group"><label for="doctor_name">Doctor</label><input type="text" id="doctor_name" name="doctor_name" value="{{ client.doctor_name or '' }}"></div>
+        <div class="form-group"><label for="clinic_id">Clinic ID</label><input type="text" id="clinic_id" name="clinic_id" value="{{ client.clinic_id or '' }}"></div>
     </div>
-    
-    <div class="form-group">
-        <label for="address">Address:</label>
-        <input type="text" id="address" name="address" value="{{ client.address }}" required>
+    <div class="form-group"><label for="emergency_info">Emergency info</label><textarea id="emergency_info" name="emergency_info" rows="3">{{ client.emergency_info or '' }}</textarea></div>
+    <div class="form-group"><label for="psychological_info">Care notes</label><textarea id="psychological_info" name="psychological_info" rows="3">{{ client.psychological_info or '' }}</textarea></div>
+    <h3 style="margin-top:10px">Devices</h3>
+    <div class="grid grid-2" style="gap:16px">
+        <div class="form-group">
+            <label for="device_name">Door lock ID (ESP32)</label>
+            <input type="text" id="device_name" name="device_name" placeholder="e.g. door01" value="{{ client.device_name or '' }}">
+            <span class="form-text">Must match <code>DEVICE_ID</code> in the door-lock sketch. Empty = the patient's CPR.</span>
+        </div>
+        <div class="form-group">
+            <label for="camera_url">Local camera URL (optional)</label>
+            <input type="text" id="camera_url" name="camera_url" placeholder="http://192.168.0.102" value="{{ client.camera_url or '' }}">
+            <span class="form-text">Only for a camera on the same network. The ESP32-CAM normally pushes video to the server.</span>
+        </div>
     </div>
-    
-    <div class="form-group">
-        <label for="doctor_name">Doctor's Name:</label>
-        <input type="text" id="doctor_name" name="doctor_name" value="{{ client.doctor_name }}" required>
-    </div>
-    
-    <div class="form-group">
-        <label for="clinic_id">Clinic ID:</label>
-        <input type="text" id="clinic_id" name="clinic_id" value="{{ client.clinic_id }}" required>
-    </div>
-    
-    <div class="form-group">
-        <label for="emergency_info">Emergency Info:</label>
-        <textarea id="emergency_info" name="emergency_info" rows="3">{{ client.emergency_info }}</textarea>
-    </div>
-    
-    <div class="form-group">
-        <label for="psychological_info">Psychological Info:</label>
-        <textarea id="psychological_info" name="psychological_info" rows="3">{{ client.psychological_info }}</textarea>
-    </div>
-    
-    <div class="mb-3">
-      <label for="device_name" class="form-label">Device Name (ESP32 Lock)</label>
-      <input type="text" id="device_name" name="device_name" class="form-control"
-             placeholder="e.g., door01"
-             value="{{ client.device_name or '' }}">
-      <div class="form-text">This must match the <code>DEVICE_NAME</code> set in the ESP32 sketch.</div>
-    </div>
-
-    
-    <div class="mb-3">
-      <label class="form-label">Camera URL (host or full stream URL)</label>
-      <input type="text" class="form-control" name="camera_url"
-             placeholder="e.g. http://192.168.0.102  or  http://192.168.0.102:81/stream"
-             value="{{ client.camera_url or '' }}">
-      <div class="form-text">
-        You can enter just the device address and we’ll use <code>:81/stream</code> automatically.
-      </div>
-    </div>
-    
     <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-        <a href="{{ url_for('client_detail', client_id=client.id) }}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+        <a href="{{ url_for('client_detail', client_id=client.id) }}" class="btn">Cancel</a>
     </div>
 </form>
-
-<style>
-    .form-group {
-        margin-bottom: 15px;
-    }
-    .form-group label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-    }
-    .form-group input,
-    .form-group textarea {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-    .form-group textarea {
-        min-height: 80px;
-    }
-    .form-actions {
-        margin-top: 20px;
-    }
-    .btn {
-        padding: 8px 16px;
-        border-radius: 4px;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .btn-primary {
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-    }
-    .btn-secondary {
-        background-color: #f44336;
-        color: white;
-        margin-left: 10px;
-    }
-</style>
 {% endblock %}

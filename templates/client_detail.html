@@ -1,330 +1,252 @@
 {% extends "base.html" %}
 
-{% block title %}{{ client.name }} - Healthcare System{% endblock %}
+{% block title %}{{ client.name }}{% endblock %}
 
 {% block content %}
-<h2>{{ client.name }} (CPR: {{ client.cpr }})</h2>
-<p>Municipality: {{ client.municipality }}</p>
-
-<div class="section">
-    <h3>Basic Info</h3>
-    <p>Address: {{ client.address }}</p>
-    <p>Doctor: {{ client.doctor_name }}</p>
-    <p>Clinic ID: {{ client.clinic_id }}</p>
+<div class="page-header">
+    <div>
+        <div class="breadcrumb"><a href="{{ url_for('dashboard') }}">Patients</a> / {{ client.name }}</div>
+        <h2>{{ client.name or client.cpr }}</h2>
+        <p class="subtitle mono">CPR {{ client.cpr }} · {{ client.municipality or 'No municipality' }}</p>
+    </div>
+    <div class="btn-row">
+        <span class="pill {{ 'online' if robot_online else 'offline' }}" id="pillRobot">Robot {{ 'online' if robot_online else 'offline' }}</span>
+        {% if lock_online is not none %}
+        <span class="pill {{ 'online' if lock_online else 'offline' }}" id="pillLock">Door lock {{ 'online' if lock_online else 'offline' }}</span>
+        {% endif %}
+        <span class="pill {{ 'online' if camera_live else 'offline' }}" id="pillCam">Camera {{ 'live' if camera_live else 'idle' }}</span>
+        <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn">Edit patient</a>
+    </div>
 </div>
 
+<div class="grid grid-3">
+    <!-- Quick actions -->
+    <div class="card">
+        <div class="card-header"><h3>Quick actions</h3></div>
+        <div style="display:grid; gap:14px;">
+            <div>
+                <div class="form-label">Door lock</div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-success" onclick="sendLock('open')">🔓 Unlock</button>
+                    <button type="button" class="btn btn-danger" onclick="sendLock('close')">🔒 Lock</button>
+                </div>
+            </div>
+            <div>
+                <div class="form-label">Camera</div>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-primary" id="btnOpenCam">📷 Open camera</button>
+                    <button type="button" class="btn" id="btnCloseCam" disabled>Close</button>
+                </div>
+            </div>
+            <div>
+                <div class="form-label">Say something through the robot</div>
+                <form id="sayForm" class="btn-row" style="flex-wrap:nowrap">
+                    <input type="text" id="sayText" placeholder="e.g. I will visit you at 14:00" maxlength="500">
+                    <button type="submit" class="btn btn-primary">Send</button>
+                </form>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-sm" onclick="robotSync()">🔄 Sync medicines to robot</button>
+            </div>
+        </div>
+    </div>
 
-<div class="section">
-    <h3>Medical Data</h3>
-    <h4>Medicines</h4>
-    <ul>
-        {% for med in medicines %}
-        <li>{{ med.name }} - Side Effects: {{ med.side_effect }} [{{ 'Active' if med.active else 'Inactive' }}]</li>
-        {% endfor %}
-    </ul>
-    
-    <h4>Medication Times</h4>
-    <ul>
-        {% for mt in med_times %}
-        <li>{{ mt.date }} at {{ mt.time }} - {{ 'Taken' if mt.taken else 'Pending' }}</li>
-        {% endfor %}
-    </ul>
+    <!-- Vitals -->
+    <div class="card">
+        <div class="card-header"><h3>Vital signs</h3><span class="muted" id="vitalsTime">{{ vitals[0].ts|localtime if vitals else 'No readings yet' }}</span></div>
+        {% set v = vitals[0] if vitals else None %}
+        <div class="grid grid-2" style="gap:12px">
+            <div class="vital {{ 'bad' if v and v.spo2 and v.spo2 < 90 }}" id="vSpo2"><div class="vital-label">SpO₂</div><div class="vital-value">{{ '%.0f'|format(v.spo2) if v and v.spo2 else '--' }}<small>%</small></div></div>
+            <div class="vital {{ 'bad' if v and v.pulse and (v.pulse < 40 or v.pulse > 130) }}" id="vPulse"><div class="vital-label">Pulse</div><div class="vital-value">{{ '%.0f'|format(v.pulse) if v and v.pulse else '--' }}<small> bpm</small></div></div>
+            <div class="vital" id="vTemp"><div class="vital-label">Skin temp.</div><div class="vital-value">{{ '%.1f'|format(v.temp_object) if v and v.temp_object else '--' }}<small> °C</small></div></div>
+            <div class="vital" id="vAmb"><div class="vital-label">Room temp.</div><div class="vital-value">{{ '%.1f'|format(v.temp_ambient) if v and v.temp_ambient else '--' }}<small> °C</small></div></div>
+        </div>
+        {% if vitals|length > 1 %}
+        <details style="margin-top:12px">
+            <summary class="muted" style="cursor:pointer">Recent readings</summary>
+            <table style="margin-top:8px">
+                <tr><th>Time</th><th>SpO₂</th><th>Pulse</th><th>Temp</th></tr>
+                {% for r in vitals %}
+                <tr><td class="muted">{{ r.ts|localtime('%d/%m %H:%M') }}</td><td>{{ '%.0f'|format(r.spo2) if r.spo2 else '-' }}</td><td>{{ '%.0f'|format(r.pulse) if r.pulse else '-' }}</td><td>{{ '%.1f'|format(r.temp_object) if r.temp_object else '-' }}</td></tr>
+                {% endfor %}
+            </table>
+        </details>
+        {% endif %}
+    </div>
+
+    <!-- Patient info -->
+    <div class="card">
+        <div class="card-header"><h3>Patient info</h3></div>
+        <dl class="info-list" style="grid-template-columns: 120px 1fr;">
+            <dt>Address</dt><dd>{{ client.address or '—' }}</dd>
+            <dt>Doctor</dt><dd>{{ client.doctor_name or '—' }}</dd>
+            <dt>Clinic ID</dt><dd>{{ client.clinic_id or '—' }}</dd>
+            <dt>Emergency</dt><dd>{{ client.emergency_info or '—' }}</dd>
+            <dt>Notes</dt><dd>{{ client.psychological_info or '—' }}</dd>
+            <dt>Door lock ID</dt><dd class="mono">{{ client.device_name or '— (uses CPR)' }}</dd>
+        </dl>
+    </div>
 </div>
 
-<div class="section">
-    <h3>Last Notifications</h3>
-    <table class="notification-table">
-        <tr>
-            <th>Date/Time</th>
-            <th>Urgency</th>
-            <th>Message</th>
-        </tr>
-        {% for note in notifications %}
-        <tr class="notification {{ note.urgency }}">
-            <td>{{ note.date_time.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td>{{ note.urgency|replace('_', ' ') }}</td>
-            <td>{{ note.note }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% if notification_count > 3 %}
-    <a href="{{ url_for('notification_history', client_id=client.id) }}" class="btn btn-secondary">
-        View Full Notification History ({{ notification_count }} total)
-    </a>
-    {% endif %}
+<div class="card camera-box" id="cameraWrap">
+    <img id="cameraStream" alt="Live camera">
 </div>
 
-<!--action-buttons -->
-<div class="action-buttons">
-    <a href="{{ url_for('add_visit', client_id=client.id) }}" class="btn btn-primary">
-        Record New Visit
-    </a>
-    
-    <a href="{{ url_for('manage_client_medicines', client_id=client.id) }}" class="btn btn-primary">
-        Manage Medicines
-    </a>
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Medicines</h3>
+            <a href="{{ url_for('manage_client_medicines', client_id=client.id) }}" class="btn btn-sm btn-primary">Manage</a>
+        </div>
+        {% if medicines %}
+        <table>
+            <tr><th>Name</th><th>Schedule</th><th>Status</th></tr>
+            {% for med in medicines %}
+            <tr>
+                <td><b>{{ med.name }}</b>{% if med.side_effect %}<div class="muted" style="font-size:.82rem">{{ med.side_effect }}</div>{% endif %}</td>
+                <td>{% if med.get_times_list() %}{{ 'Daily' if med.schedule_type == 'daily' else med.get_days_list()|join(', ') }} · {{ med.get_times_list()|join(', ') }}{% else %}<span class="muted">No times</span>{% endif %}</td>
+                <td><span class="pill {{ 'active' if med.active else 'inactive' }}">{{ 'Active' if med.active else 'Paused' }}</span></td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}<p class="empty">No medicines yet.</p>{% endif %}
+    </div>
 
-    <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn btn-secondary">
-        Edit Client
-    </a>
+    <div class="card">
+        <div class="card-header">
+            <h3>Alerts</h3>
+            <div class="btn-row">
+                <button class="btn btn-sm" type="button" onclick="hideAll()">Mark all handled</button>
+                <a href="{{ url_for('notification_history', client_id=client.id) }}" class="btn btn-sm">History ({{ notification_count }})</a>
+            </div>
+        </div>
+        {% if notifications %}
+        <table>
+            {% for n in notifications %}
+            <tr style="{{ 'opacity:.6' if n.hidden }}">
+                <td class="muted" style="white-space:nowrap">{{ n.date_time|localtime('%d/%m %H:%M') }}</td>
+                <td><span class="urgency {{ n.urgency }}">{{ (n.urgency or 'normal')|replace('_', ' ') }}</span></td>
+                <td>{{ n.note }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}<p class="empty">No alerts.</p>{% endif %}
+    </div>
 </div>
 
-<div class="camera-panel" id="cameraPanel" style="transition:height .25s ease;border-radius:12px;overflow:hidden;background:#111;">
-  <div style="padding:8px; display:flex; gap:8px;">
-    <button id="btnOpenCam" class="btn btn-primary"
-            onclick="openCamera({{ client.id }}, '{{ client.cpr }}')">
-      Open Camera
-    </button>
-    <button id="btnCloseCam" class="btn btn-secondary"
-            onclick="closeCamera({{ client.id }}, '{{ client.cpr }}')" disabled>
-      Close Camera
-    </button>
-  </div>
-
-  <!-- Collapsed by default -->
-  <div id="camWrap" style="height:0;">
-    <img id="camFeed" alt="Live camera" style="max-width:100%; display:block; margin:auto;">
-  </div>
-</div>
-
-<script>
-async function openCamera(clientId, cpr) {
-  try {
-    const res = await fetch(`/client/${clientId}/camera/open`, {method: 'POST', headers: {'X-Requested-With':'fetch'}});
-    const data = await res.json();
-    if (!data.ok) { alert(data.message || 'Failed to open camera'); return; }
-
-    // set stream src (push MJPEG served by server)
-    const img = document.getElementById('camFeed');
-    img.src = data.stream_url; // e.g. /client/<CPR>/mjpeg
-    // expand the viewport
-    const wrap = document.getElementById('camWrap');
-    wrap.style.height = '360px'; // adjust to your preferred expanded height
-
-    // toggle buttons
-    document.getElementById('btnOpenCam').disabled = true;
-    document.getElementById('btnCloseCam').disabled = false;
-  } catch (e) {
-    console.error(e);
-    alert('Open camera error');
-  }
-}
-
-async function closeCamera(clientId, cpr) {
-  try {
-    await fetch(`/client/${clientId}/camera/close`, {method: 'POST', headers: {'X-Requested-With':'fetch'}});
-  } catch (_) {}
-
-  // stop the stream (browser side) and collapse
-  const img = document.getElementById('camFeed');
-  img.removeAttribute('src');           // hard stop network
-  img.src = '';                         // extra safety
-  const wrap = document.getElementById('camWrap');
-  wrap.style.height = '0';
-
-  // toggle buttons
-  document.getElementById('btnOpenCam').disabled = false;
-  document.getElementById('btnCloseCam').disabled = true;
-}
-</script>
-
-
-
-<!-- Lock Control (ESP32) -->
-<div class="section">
-  <h3>Door lock</h3>
-  <button type="button" class="btn btn-success" onclick="sendLock('open')">Open</button>
-  <button type="button" class="btn btn-danger"  onclick="sendLock('close')">Close</button>
-  <small id="lock-msg" style="margin-left:8px;"></small>
-</div>
-
-<script>
-async function sendLock(action) {
-  const url = action === 'open'
-    ? "{{ url_for('lock_open',  client_id=client.id) }}"
-    : "{{ url_for('lock_close', client_id=client.id) }}";
-
-  // prevent any stray form submit
-  if (window.event) { try { window.event.preventDefault(); } catch(e){} }
-
-  const el = document.getElementById('lock-msg');
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      credentials: 'same-origin',           // send session cookie for @login_required
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
-    if (!res.ok) {
-      el.textContent = `Error ${res.status}`;
-      setTimeout(()=> el.textContent='', 2500);
-      return;
-    }
-    // server enqueues SSE event; device should react immediately
-    el.textContent = `Lock ${action} sent`;
-    setTimeout(()=> el.textContent='', 1500);
-  } catch (err) {
-    el.textContent = 'Network error';
-    setTimeout(()=> el.textContent='', 2500);
-  }
-}
-</script>
-
-
-<!-- Visits section-->
-<div class="section">
-    <h3>Recent Visits</h3>
+<div class="card">
+    <div class="card-header">
+        <h3>Recent visits</h3>
+        <div class="btn-row">
+            <a href="{{ url_for('add_visit', client_id=client.id) }}" class="btn btn-sm btn-primary">+ Record visit</a>
+            <a href="{{ url_for('visit_history', client_id=client.id) }}" class="btn btn-sm">All visits ({{ visit_count }})</a>
+        </div>
+    </div>
     {% if visits %}
-    <table class="visit-table">
-        <tr>
-            <th>Date</th>
-            <th>Nurse</th>
-            <th>Notes</th>
-            <th>Next Visit</th>
-        </tr>
+    <table>
+        <tr><th>Date</th><th>Nurse</th><th>Notes</th><th>Next visit</th></tr>
         {% for visit in visits %}
         <tr>
-            <td>{{ visit.date }} {{ visit.time }}</td>
-            <td>{{ visit.nurse_name }}</td>
-            <td>{{ visit.notes|truncate(50) }}</td>
-            <td>{{ visit.next_visit_date or '-' }}</td>
+            <td style="white-space:nowrap">{{ visit.date }} {{ visit.time }}</td>
+            <td>{{ visit.nurse_name or '—' }}</td>
+            <td>{{ visit.notes|truncate(90) }}</td>
+            <td>{{ visit.next_visit_date or '—' }}</td>
         </tr>
         {% endfor %}
     </table>
-    {% if visit_count > 3 %}
-    <a href="{{ url_for('visit_history', client_id=client.id) }}" class="btn btn-secondary">
-        View Full Visit History ({{ visit_count }} total)
-    </a>
-    {% endif %}
-    {% else %}
-    <p>No visits recorded yet</p>
-    {% endif %}
+    {% else %}<p class="empty">No visits recorded yet.</p>{% endif %}
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-(function() {
-  const openBtn  = document.getElementById('btnOpenCam');
-  const closeBtn = document.getElementById('btnCloseCam');
-  const wrap     = document.getElementById('cameraWrap');
-  let   img      = document.getElementById('cameraStream');
-  const badge    = document.getElementById('camStatus');
-  const clientId = {{ client.id }};
-  const fallbackStream = "{{ camera_url|default('http://192.168.0.102:81/stream', true) }}";
+const CLIENT_ID = {{ client.id }};
 
-  let camOpen = false;
-  let camUrl  = null;
+async function sendLock(action) {
+  if (action === 'open' && !confirm('Unlock the door of {{ client.name|e }}?')) return;
+  try {
+    const r = await LC.post(action === 'open' ? "{{ url_for('lock_open', client_id=client.id) }}" : "{{ url_for('lock_close', client_id=client.id) }}");
+    LC.toast(r.delivered ? `Door ${action} command delivered` : `Door ${action}: ${r.message}`, r.delivered ? '' : 'urgent');
+  } catch (e) { LC.toast('Error: ' + e.message, 'critical'); }
+}
 
-  function getCookie(name) {
-    // read CSRF token if present
-    const m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
-    return m ? decodeURIComponent(m[2]) : null;
-  }
+async function robotSync() {
+  try { const r = await LC.post(`/client/${CLIENT_ID}/robot/sync`); LC.toast(r.delivered ? 'Robot is syncing now' : 'Robot offline - it syncs when it reconnects'); }
+  catch (e) { LC.toast('Error: ' + e.message, 'critical'); }
+}
 
-  async function postJSON(url) {
-    const headers = { 'Content-Type': 'application/json' };
-    const csrf = getCookie('csrf_token');
-    if (csrf) headers['X-CSRFToken'] = csrf;
-    const res = await fetch(url, { method: 'POST', headers, credentials: 'same-origin' });
-    return res;
-  }
+async function hideAll() {
+  try { await LC.post(`/client/${CLIENT_ID}/notifications/hide_all`); location.reload(); }
+  catch (e) { LC.toast('Error: ' + e.message, 'critical'); }
+}
 
-  async function openCameraInline() {
-    if (camOpen) return;
+document.getElementById('sayForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = document.getElementById('sayText');
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    const r = await LC.post(`/client/${CLIENT_ID}/robot/say`, {text});
+    LC.toast(r.delivered ? 'Message sent - the robot is speaking' : 'Robot offline - message will be spoken if it reconnects within 2 minutes');
+    input.value = '';
+  } catch (err) { LC.toast('Error: ' + err.message, 'critical'); }
+});
+
+// camera
+(function () {
+  const openBtn = document.getElementById('btnOpenCam'), closeBtn = document.getElementById('btnCloseCam');
+  const wrap = document.getElementById('cameraWrap');
+  let img = document.getElementById('cameraStream');
+  openBtn.addEventListener('click', async () => {
     openBtn.disabled = true;
-    badge.style.display = 'inline-block';
-    badge.textContent = 'Opening…';
-
     try {
-      const res = await postJSON(`/client/${clientId}/camera/open`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json();
-      if (!(j.ok || j.status === 'ok')) throw new Error(j.message || 'Open failed');
-
-      camUrl = (j.stream_url || fallbackStream);
-      const bust = camUrl + (camUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
-
-      wrap.style.display = 'block';
-      img.src = bust;
-
-      setTimeout(() => {
-        badge.textContent = 'Live';
-        openBtn.disabled = true;
-        closeBtn.disabled = false;
-        camOpen = true;
-      }, 300);
-    } catch (e) {
-      console.error('[camera] open error:', e);
-      alert('Network error opening camera');
-      badge.style.display = 'none';
-      openBtn.disabled = false;
-    }
-  }
-
-  async function closeCameraInline() {
-    closeBtn.disabled = true;
-    badge.style.display = 'inline-block';
-    badge.textContent = 'Closing…';
-
-    try {
-      const res = await postJSON(`/client/${clientId}/camera/close`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      // Tear down MJPEG: clear src + replace node so the HTTP stream closes
-      img.src = '';
-      const newImg = img.cloneNode(false);
-      img.replaceWith(newImg);
-      img = newImg;
-      img.id = 'cameraStream';
-
-      wrap.style.display = 'none';
-      badge.style.display = 'none';
-      camOpen = false;
-      openBtn.disabled = false;
-    } catch (e) {
-      console.error('[camera] close error:', e);
-      alert('Network error closing camera');
+      const j = await LC.post(`/client/${CLIENT_ID}/camera/open`);
+      img.src = j.stream_url + (j.stream_url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      wrap.classList.add('open');
       closeBtn.disabled = false;
-    }
-  }
-
-  // Wire buttons after DOM is ready (avoids scope issues)
-  document.addEventListener('DOMContentLoaded', () => {
-    openBtn.addEventListener('click', openCameraInline);
-    closeBtn.addEventListener('click', closeCameraInline);
+      wrap.scrollIntoView({behavior: 'smooth', block: 'center'});
+    } catch (e) { LC.toast('Camera error: ' + e.message, 'critical'); openBtn.disabled = false; }
+  });
+  closeBtn.addEventListener('click', async () => {
+    closeBtn.disabled = true;
+    try { await LC.post(`/client/${CLIENT_ID}/camera/close`); } catch (_) {}
+    const fresh = img.cloneNode(false); fresh.removeAttribute('src'); img.replaceWith(fresh); img = fresh;
+    wrap.classList.remove('open');
+    openBtn.disabled = false;
   });
 })();
+
+// live status + vitals
+function setPill(id, on, onText, offText) {
+  const p = document.getElementById(id); if (!p) return;
+  p.className = 'pill ' + (on ? 'online' : 'offline'); p.textContent = on ? onText : offText;
+}
+function setVital(id, val, digits, bad) {
+  const el = document.getElementById(id); if (!el || val == null) return;
+  el.querySelector('.vital-value').firstChild.textContent = Number(val).toFixed(digits);
+  el.classList.toggle('bad', !!bad);
+}
+function renderVitals(v) {
+  if (!v) return;
+  setVital('vSpo2', v.spo2, 0, v.spo2 != null && v.spo2 < 90);
+  setVital('vPulse', v.pulse, 0, v.pulse != null && (v.pulse < 40 || v.pulse > 130));
+  setVital('vTemp', v.temp_object, 1);
+  setVital('vAmb', v.temp_ambient, 1);
+  document.getElementById('vitalsTime').textContent = LC.fmtTime(v.ts);
+}
+LC.on('vitals_update', d => { if (d.client_id === CLIENT_ID) renderVitals(d.vitals); });
+LC.on('client_status_update', d => { if (d.client_cpr === {{ client.cpr|tojson }}) setPill('pillRobot', d.status === 'online', 'Robot online', 'Robot offline'); });
+LC.on('new_notification', d => { if (d.client_id === CLIENT_ID) setTimeout(() => location.reload(), 1500); });
+setInterval(async () => {
+  try {
+    const r = await fetch(`/api/client/${CLIENT_ID}/live`, {credentials: 'same-origin'});
+    if (!r.ok) return;
+    const s = await r.json();
+    setPill('pillRobot', s.robot_online, 'Robot online', 'Robot offline');
+    if (s.lock_online !== null) setPill('pillLock', s.lock_online, 'Door lock online', 'Door lock offline');
+    setPill('pillCam', s.camera_live, 'Camera live', 'Camera idle');
+    renderVitals(s.vitals);
+  } catch (_) {}
+}, 10000);
 </script>
-
-<style>
-.btn-servo {
-    background-color: #4a89dc;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-.btn-servo:hover {
-    background-color: #3b7dd8;
-}
-.btn-servo i {
-    margin-right: 8px;
-}
-.notification-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.notification-table th {
-    background-color: #f2f2f2;
-}
-.notification-table td, .notification-table th {
-    padding: 8px;
-    border: 1px solid #ddd;
-}
-.notification.normal { background-color: #e8f5e9; }
-.notification.urgent { background-color: #fff8e1; }
-.notification.very_urgent { background-color: #ffe0b2; }
-.notification.critical { background-color: #ffcdd2; }
-</style>
-
 {% endblock %}

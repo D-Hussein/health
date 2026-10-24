@@ -1,0 +1,44 @@
+{# shared by add_medicine.html and edit_medicine.html; `medicine` may be undefined #}
+{% set m = medicine if medicine is defined else None %}
+<form method="post" class="card form-card">
+    <div class="form-group">
+        <label for="name">Medicine name *</label>
+        <input type="text" id="name" name="name" value="{{ m.name if m else request.form.get('name', '') }}" required>
+    </div>
+    <div class="form-group">
+        <label for="side_effect">Notes / side effects</label>
+        <textarea id="side_effect" name="side_effect" rows="3">{{ (m.side_effect or '') if m else request.form.get('side_effect', '') }}</textarea>
+    </div>
+    <div class="grid grid-2" style="gap:16px">
+        <div class="form-group">
+            <label for="schedule_type">Schedule</label>
+            <select id="schedule_type" name="schedule_type">
+                <option value="daily" {{ 'selected' if not m or m.schedule_type == 'daily' }}>Every day</option>
+                <option value="weekly" {{ 'selected' if m and m.schedule_type == 'weekly' }}>Specific days</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="times">Times (24h, comma separated) *</label>
+            <input type="text" id="times" name="times" placeholder="08:00, 12:30, 20:00"
+                   value="{{ m.get_times_list()|join(', ') if m else request.form.get('times', '') }}" required>
+        </div>
+    </div>
+    <div class="form-group" id="days-group" style="display: {{ 'block' if m and m.schedule_type == 'weekly' else 'none' }};">
+        <label>Days</label>
+        <div class="days-checkboxes">
+            {% for day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+            <label class="day-checkbox"><input type="checkbox" name="days" value="{{ day }}" {{ 'checked' if m and day in m.get_days_list() }}> {{ day }}</label>
+            {% endfor %}
+        </div>
+    </div>
+    <label class="check"><input type="checkbox" name="active" {{ 'checked' if not m or m.active }}> Active (robot reminds and dispenses)</label>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">{{ 'Save changes' if m else 'Add medicine' }}</button>
+        <a href="{{ url_for('manage_client_medicines', client_id=client.id) }}" class="btn">Cancel</a>
+    </div>
+</form>
+<script>
+document.getElementById('schedule_type').addEventListener('change', function () {
+  document.getElementById('days-group').style.display = this.value === 'weekly' ? 'block' : 'none';
+});
+</script>

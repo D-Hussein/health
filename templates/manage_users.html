@@ -1,32 +1,30 @@
 {% extends "base.html" %}
-
-{% block title %}Manage Users - Healthcare System{% endblock %}
-
+{% block title %}Staff{% endblock %}
 {% block content %}
-<h2>Manage Nurse Users</h2>
-<table border="1">
-    <tr>
-        <th>CPR</th>
-        <th>Name</th>
-        <th>Municipality</th>
-        <th>Admin</th>
-        <th>Actions</th>
-    </tr>
+<div class="page-header">
+    <div><h2>Staff</h2><p class="subtitle">Nurses and administrators</p></div>
+    <a href="{{ url_for('create_user') }}" class="btn btn-primary">+ New user</a>
+</div>
+<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>CPR / Username</th><th>Phone</th><th>Municipality</th><th>Role</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody>
     {% for nurse in nurses %}
     <tr>
-        <td>{{ nurse.cpr }}</td>
-        <td>{{ nurse.name }}</td>
-        <td>{{ nurse.municipality }}</td>
-        <td>{{ "Yes" if nurse.is_admin else "No" }}</td>
-        <td>
-            <a href="{{ url_for('edit_user', user_id=nurse.id) }}">Edit</a> |
-            <form method="POST" action="{{ url_for('delete_user', user_id=nurse.id) }}" style="display: inline;">
-                <button type="submit" onclick="return confirm('Are you sure you want to delete this user?')">Delete</button>
+        <td><b>{{ nurse.name }}</b></td>
+        <td class="mono">{{ nurse.cpr }}</td>
+        <td>{{ nurse.phone_number or '—' }}</td>
+        <td>{{ 'All' if nurse.municipality == 'all' else nurse.municipality }}</td>
+        <td><span class="pill nodot {{ 'warn' if nurse.is_admin else 'offline' }}">{{ 'Admin' if nurse.is_admin else 'Nurse' }}</span></td>
+        <td style="text-align:right; white-space:nowrap">
+            <a href="{{ url_for('edit_user', user_id=nurse.id) }}" class="btn btn-sm">Edit</a>
+            {% if nurse.id != current_user.id %}
+            <form method="POST" action="{{ url_for('delete_user', user_id=nurse.id) }}" class="inline" onsubmit="return confirm('Delete {{ nurse.name|e }}?')">
+                <button type="submit" class="btn btn-sm btn-ghost-danger">Delete</button>
             </form>
+            {% endif %}
         </td>
     </tr>
     {% endfor %}
-</table>
-<br>
-<a href="{{ url_for('create_user') }}">Create New User</a>
+    </tbody>
+</table></div></div>
 {% endblock %}

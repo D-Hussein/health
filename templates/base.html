@@ -1,76 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>{% block title %}Healthcare System{% endblock %}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .navbar { background: #0078d7; padding: 10px; color: white; }
-        .navbar a { color: white; margin-right: 15px; text-decoration: none; }
-        .flash-message { padding: 10px; margin: 10px 0; }
-        .error { background: #ffdddd; }
-        .success { background: #ddffdd; }
-        .action-buttons {
-            margin: 20px 0;
-        }
-        .btn {
-            padding: 8px 16px;
-            border-radius: 4px;
-            text-decoration: none;
-            margin-right: 10px;
-        }
-        .btn-primary {
-            background-color: #007bff;
-            color: white;
-        }
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-        .visit-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .visit-table th, .visit-table td {
-            padding: 8px;
-            border: 1px solid #ddd;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-        }
-        .form-group input, .form-group textarea {
-            width: 100%;
-            padding: 8px;
-        }
-        .form-actions {
-            margin-top: 20px;
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Lima Life Crown{% endblock %} · Lima Life Crown</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👑</text></svg>">
 </head>
-<body>
-    <div class="navbar">
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        {% if current_user.is_authenticated %}
-            {% if current_user.is_admin %}
-                <a href="{{ url_for('create_user') }}">Create User</a>
-                <a href="{{ url_for('manage_users') }}">Manage Users</a>
+<body {% if current_user.is_authenticated %}data-auth="1"{% endif %}>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="{{ url_for('dashboard') }}"><span class="brand-logo">👑</span> Lima Life Crown</a>
+            {% if current_user.is_authenticated %}
+            <nav class="nav">
+                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Patients</a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('manage_users') }}" class="{{ 'active' if request.endpoint in ('manage_users', 'create_user', 'edit_user') }}">Staff</a>
+                {% endif %}
+                <a href="{{ url_for('change_password') }}" class="{{ 'active' if request.endpoint == 'change_password' }}">Password</a>
+            </nav>
+            <div class="user-chip">
+                <span class="live-dot" id="liveDot" title="Live updates"></span>
+                <span>{{ current_user.name }}{% if current_user.municipality %} · {{ 'All regions' if current_user.municipality == 'all' else current_user.municipality }}{% endif %}</span>
+                <span class="avatar">{{ (current_user.name or '?')[:1]|upper }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm">Log out</a>
+            </div>
             {% endif %}
-            <a href="{{ url_for('change_password') }}">Change Password</a>
-            <a href="{{ url_for('logout') }}">Logout</a>
-        {% endif %}
-    </div>
+        </div>
+    </header>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-stack">
+                {% for category, message in messages %}
                 <div class="flash-message {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
 
-    {% block content %}{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
+
+    {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
+    {% endif %}
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

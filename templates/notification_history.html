@@ -1,50 +1,24 @@
 {% extends "base.html" %}
-
-{% block title %}Notification History - {{ client.name }}{% endblock %}
-
+{% block title %}Alerts · {{ client.name }}{% endblock %}
 {% block content %}
-<h2>Notification History for {{ client.name }}</h2>
-<a href="{{ url_for('client_detail', client_id=client.id) }}" class="btn btn-secondary">
-    Back to Client Details
-</a>
-
-<div class="section">
-    <table class="notification-table">
-        <tr>
-            <th>Date/Time</th>
-            <th>Urgency</th>
-            <th>Message</th>
-            <th>User</th>
-        </tr>
-        {% for note in notifications %}
-        <tr class="notification {{ note.urgency }}">
-            <td>{{ note.date_time.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td>{{ note.urgency|replace('_', ' ') }}</td>
-            <td>{{ note.note }}</td>
-            <td>{{ note.user_name }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-
-<style>
-.notification-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-.notification-table th {
-    background-color: #f2f2f2;
-    padding: 12px;
-    text-align: left;
-}
-.notification-table td {
-    padding: 12px;
-    border-bottom: 1px solid #ddd;
-}
-.notification.normal { background-color: #e8f5e9; }
-.notification.urgent { background-color: #fff8e1; }
-.notification.very_urgent { background-color: #ffe0b2; }
-.notification.critical { background-color: #ffcdd2; }
-</style>
+<div class="page-header"><div>
+    <div class="breadcrumb"><a href="{{ url_for('dashboard') }}">Patients</a> / <a href="{{ url_for('client_detail', client_id=client.id) }}">{{ client.name }}</a></div>
+    <h2>Alert &amp; activity history</h2>
+    <p class="subtitle">Includes door/camera actions by staff (audit log).</p>
+</div></div>
+<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>Time</th><th>Urgency</th><th>Message</th><th>By</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for note in notifications %}
+    <tr>
+        <td class="muted" style="white-space:nowrap">{{ note.date_time|localtime }}</td>
+        <td><span class="urgency {{ note.urgency }}">{{ (note.urgency or 'normal')|replace('_', ' ') }}</span></td>
+        <td>{{ note.note }}</td>
+        <td>{{ note.user_name or '—' }}</td>
+        <td class="muted">{{ 'Handled' if note.hidden else 'Open' }}</td>
+    </tr>
+    {% else %}<tr><td colspan="5" class="empty">No alerts.</td></tr>
+    {% endfor %}
+    </tbody>
+</table></div></div>
 {% endblock %}

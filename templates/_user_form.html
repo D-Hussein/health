@@ -1,0 +1,9 @@
+{% set n = nurse if nurse is defined else None %}
+<div class="grid grid-2" style="gap:16px">
+    <div class="form-group"><label for="cpr">CPR / Username</label><input type="text" id="cpr" name="cpr" value="{{ n.cpr if n else '' }}" required></div>
+    <div class="form-group"><label for="name">Name</label><input type="text" id="name" name="name" value="{{ n.name if n else '' }}" required></div>
+    <div class="form-group"><label for="phone">Phone</label><input type="text" id="phone" name="phone" value="{{ (n.phone_number or '') if n else '' }}"></div>
+    <div class="form-group"><label for="municipality">Municipality</label><input type="text" id="municipality" name="municipality" value="{{ n.municipality if n else '' }}" required><span class="form-text">Use <code>all</code> to see every municipality.</span></div>
+    <div class="form-group"><label for="password">{{ 'New password (leave empty to keep)' if n else 'Password' }}</label><input type="password" id="password" name="password" minlength="8" autocomplete="new-password" {{ '' if n else 'required' }}></div>
+</div>
+<label class="check"><input type="checkbox" id="is_admin" name="is_admin" {{ 'checked' if n and n.is_admin }}> Administrator</label>

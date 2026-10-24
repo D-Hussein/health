@@ -1,716 +1,214 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Healthcare System{% endblock %}
+{% block title %}Patients{% endblock %}
 
 {% block content %}
-<h2>Clients 
-    {% if current_user.is_admin or current_user.municipality == 'all' %}
-    - All Municipalities
-    {% else %}
-    in {{ current_user.municipality }}
-    {% endif %}
-</h2>
-
-{% if current_user.is_admin or current_user.municipality == 'all' %}
-<div class="filter-section">
-    <form method="GET" action="{{ url_for('dashboard') }}">
-        <label for="municipality_filter">Filter by Municipality:</label>
-        <select name="municipality" id="municipality_filter" onchange="this.form.submit()">
-            <option value="">All Municipalities</option>
-            {% for municipality in municipalities %}
-            <option value="{{ municipality }}" 
-                    {% if municipality == current_filter %}selected{% endif %}>
-                {{ municipality }}
-            </option>
-            {% endfor %}
-        </select>
-        {% if current_filter %}
-        <a href="{{ url_for('dashboard') }}" class="btn btn-clear">Clear Filter</a>
-        {% endif %}
-    </form>
-</div>
-{% endif %}
-
-<table class="client-table">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>CPR</th>
-            <th>Address</th>
-            <th>Municipality</th>
-            <th>Status</th>
-            <th>Last Updated</th>
-            <th>Notifications</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for client in clients %}
-        <tr data-client-id="{{ client.id }}">
-            <td>{{ client.name }}</td>
-            <td>{{ client.cpr }}</td>
-            <td>{{ client.address }}</td>
-            <td>{{ client.municipality }}</td>
-            <td>
-                <span class="status-indicator {% if client.is_online %}online{% else %}offline{% endif %}">
-                    {% if client.is_online %}🟢 Online{% else %}🔴 Offline{% endif %}
-                </span>
-            </td>
-            <td>{{ client.last_updated.strftime('%Y-%m-%d %H:%M') if client.last_updated else 'Never' }}</td>
-            <td class="notification-cell">
-                {% for notification in client.unread_notifications if not notification.hidden %}
-                <div class="notification-badge {{ notification.urgency }}"
-                     onclick="showNotificationModal({{ notification.id }})"
-                     title="{{ notification.note }} ({{ notification.date_time.strftime('%Y-%m-%d %H:%M') }})">
-                    {% if notification.urgency == 'critical' %}!
-                    {% elif notification.urgency == 'very_urgent' %}!!
-                    {% elif notification.urgency == 'urgent' %}•
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </td>
-            <td class="actions">
-                <a href="{{ url_for('client_detail', client_id=client.id) }}" class="btn btn-view">View</a>
-                <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn btn-edit">Edit</a>
-                <form method="POST"
-                      action="{{ url_for('delete_client', client_id=client.id) }}"
-                      class="inline delete-form"
-                      onsubmit="return confirm('Are you sure you want to delete {{ client.name }} (CPR: {{ client.cpr }})? This cannot be undone.');">
-                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-
-            </td>
-        </tr>
-        {% else %}
-        <tr>
-            <td colspan="8">No clients found</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-
-<!-- Notification Modal -->
-<div id="notificationModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h3>Notification Details</h3>
-        <div id="notificationDetails"></div>
-        <button class="btn btn-mark-read" onclick="markNotificationAsRead()">Mark as Read</button>
+<div class="page-header">
+    <div>
+        <h2>Patients</h2>
+        <p class="subtitle">
+            {% if current_user.is_admin or current_user.municipality == 'all' %}
+                {{ current_filter or 'All municipalities' }}
+            {% else %}
+                {{ current_user.municipality }}
+            {% endif %}
+            · live status from the robots
+        </p>
     </div>
 </div>
 
-<style>
-    .client-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-    }
-    .client-table th, .client-table td {
-        padding: 12px;
-        border: 1px solid #ddd;
-        text-align: left;
-    }
-    .client-table th {
-        background-color: #f2f2f2;
-        position: sticky;
-        top: 0;
-    }
-    .notification-cell {
-        min-width: 100px;
-    }
-    .actions {
-        display: flex;
-        gap: 8px;
-    }
-    .btn {
-        padding: 6px 12px;
-        text-decoration: none;
-        border-radius: 4px;
-        font-size: 0.9em;
-        border: none;
-        cursor: pointer;
-    }
-    .btn-view {
-        background-color: #4CAF50;
-        color: white;
-    }
-    .btn-edit {
-        background-color: #2196F3;
-        color: white;
-    }
-    .btn-mark-read {
-        background-color: #607d8b;
-        color: white;
-        margin-top: 15px;
-    }
-    .btn-clear {
-        background-color: #ff9800;
-        color: white;
-        padding: 6px 12px;
-        text-decoration: none;
-        border-radius: 4px;
-        margin-left: 10px;
-        display: inline-block;
-    }
-    .notification-badge {
-        display: inline-block;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 22px;
-        color: white;
-        font-weight: bold;
-        margin-right: 6px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .notification-badge:hover {
-        transform: scale(1.1);
-        box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-    }
-    .normal { background-color: #4CAF50; }
-    .urgent { background-color: #FFC107; }
-    .very-urgent { background-color: #FF9800; }
-    .critical { 
-        background-color: #F44336; 
-        animation: pulse 1s infinite;
-    }
-    
-    .status-indicator {
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 0.85em;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .status-indicator.online {
-        background-color: #e8f5e8;
-        color: #2e7d32;
-        animation: pulse-online 2s infinite;
-    }
-    .status-indicator.offline {
-        background-color: #ffebee;
-        color: #c62828;
-    }
-    
-    .filter-section {
-        margin: 20px 0;
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 8px;
-    }
-    .filter-section label {
-        font-weight: bold;
-        margin-right: 10px;
-    }
-    .filter-section select {
-        padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-    }
+<div class="grid grid-4" style="margin-bottom:20px;">
+    <div class="card stat"><div class="stat-icon bg-blue">👥</div><div><div class="stat-value">{{ stats.total }}</div><div class="stat-label">Patients</div></div></div>
+    <div class="card stat"><div class="stat-icon bg-green">🟢</div><div><div class="stat-value" id="statOnline">{{ stats.online }}</div><div class="stat-label">Robots online</div></div></div>
+    <div class="card stat"><div class="stat-icon bg-orange">🔔</div><div><div class="stat-value" id="statAlerts">{{ stats.alerts }}</div><div class="stat-label">Unread alerts</div></div></div>
+    <div class="card stat"><div class="stat-icon bg-red">🚨</div><div><div class="stat-value" id="statCritical">{{ stats.critical }}</div><div class="stat-label">Urgent / critical</div></div></div>
+</div>
 
-    /* Medicine update indicator */
-    .medicine-update-indicator {
-        display: inline-block;
-        margin-left: 5px;
-        animation: pulse-medicine 2s infinite;
-        font-size: 12px;
-    }
-    
-    @keyframes pulse-medicine {
-        0% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(1.1); }
-        100% { opacity: 1; transform: scale(1); }
-    }
+<div class="card">
+    <div class="card-header">
+        <div class="toolbar">
+            <input type="search" id="search" placeholder="Search name, CPR or address…">
+            {% if current_user.is_admin or current_user.municipality == 'all' %}
+            <form method="GET" action="{{ url_for('dashboard') }}" class="inline">
+                <select name="municipality" onchange="this.form.submit()">
+                    <option value="">All municipalities</option>
+                    {% for m in municipalities %}
+                    <option value="{{ m }}" {% if m == current_filter %}selected{% endif %}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
+        </div>
+    </div>
 
-    @keyframes pulse-online {
-        0% { box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.4); }
-        70% { box-shadow: 0 0 0 6px rgba(46, 125, 50, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(46, 125, 50, 0); }
-    }
+    <div class="table-wrap">
+    <table id="clientTable">
+        <thead>
+            <tr>
+                <th>Patient</th>
+                <th>Status</th>
+                <th>Latest vitals</th>
+                <th>Alerts</th>
+                <th>Municipality</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for client in clients %}
+            {% set crit = client.unread_notifications|selectattr('urgency', 'in', ['critical', 'very_urgent'])|list %}
+            <tr data-client-id="{{ client.id }}" data-cpr="{{ client.cpr }}" class="{{ 'row-critical' if crit }}"
+                data-search="{{ (client.name ~ ' ' ~ client.cpr ~ ' ' ~ (client.address or ''))|lower }}">
+                <td>
+                    <a href="{{ url_for('client_detail', client_id=client.id) }}"><b>{{ client.name or client.cpr }}</b></a>
+                    <div class="muted mono">{{ client.cpr }}{% if client.address %} · {{ client.address }}{% endif %}</div>
+                </td>
+                <td class="status-cell">
+                    <span class="pill {{ 'online' if client.is_online else 'offline' }}">{{ 'Online' if client.is_online else 'Offline' }}</span>
+                </td>
+                <td class="vitals-cell">
+                    {% set v = client.latest_vital %}
+                    {% if v %}
+                    <div class="vitals-inline">
+                        {% if v.spo2 %}<span>SpO₂ <b>{{ '%.0f'|format(v.spo2) }}%</b></span>{% endif %}
+                        {% if v.pulse %}<span>♥ <b>{{ '%.0f'|format(v.pulse) }}</b></span>{% endif %}
+                        {% if v.temp_object %}<span>🌡 <b>{{ '%.1f'|format(v.temp_object) }}°</b></span>{% endif %}
+                    </div>
+                    <div class="muted" style="font-size:.78rem">{{ v.ts|localtime }}</div>
+                    {% else %}<span class="muted">—</span>{% endif %}
+                </td>
+                <td class="notification-cell">
+                    {% for n in client.unread_notifications[:8] %}
+                    <span class="notification-badge {{ n.urgency }}" data-nid="{{ n.id }}"
+                          title="{{ n.note }} ({{ n.date_time|localtime }})">{{ {'critical': '!', 'very_urgent': '!!', 'urgent': '•'}.get(n.urgency, '✓') }}</span>
+                    {% else %}<span class="muted">—</span>
+                    {% endfor %}
+                    {% if client.unread_notifications|length > 8 %}<span class="muted">+{{ client.unread_notifications|length - 8 }}</span>{% endif %}
+                </td>
+                <td>{{ client.municipality or '—' }}</td>
+                <td style="text-align:right; white-space:nowrap">
+                    <a href="{{ url_for('client_detail', client_id=client.id) }}" class="btn btn-sm btn-primary">Open</a>
+                    <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn btn-sm">Edit</a>
+                    <form method="POST" action="{{ url_for('delete_client', client_id=client.id) }}" class="inline"
+                          onsubmit="return confirm('Delete {{ client.name|e }} ({{ client.cpr|e }}) and all their data? This cannot be undone.');">
+                        <button type="submit" class="btn btn-sm btn-ghost-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty">No patients yet. A robot appears here automatically when it connects for the first time.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
 
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-    }
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 100;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.5);
-    }
-    .modal-content {
-        background-color: #fefefe;
-        margin: 10% auto;
-        padding: 25px;
-        border: none;
-        border-radius: 8px;
-        width: 50%;
-        max-width: 600px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    .close {
-        color: #aaa;
-        float: right;
-        font-size: 28px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: color 0.3s;
-    }
-    .close:hover {
-        color: #333;
-    }
-    #notificationDetails {
-        margin: 20px 0;
-        line-height: 1.6;
-    }
-    .highlight-row {
-        animation: highlight 1.5s ease-out;
-    }
-    
-    @keyframes highlight {
-        0% { background-color: rgba(255, 235, 59, 0.3); }
-        100% { background-color: transparent; }
-    }
+<div id="notificationModal" class="modal">
+    <div class="modal-content">
+        <button class="close" type="button" onclick="closeModal()">&times;</button>
+        <h3>Alert details</h3>
+        <dl class="info-list" style="margin:16px 0">
+            <dt>Patient</dt><dd id="mdClient"></dd>
+            <dt>Time</dt><dd id="mdTime"></dd>
+            <dt>Urgency</dt><dd><span id="mdUrgency" class="urgency"></span></dd>
+            <dt>Message</dt><dd id="mdNote"></dd>
+        </dl>
+        <div class="btn-row">
+            <button class="btn btn-primary" type="button" onclick="markRead()">Mark as handled</button>
+            <a class="btn" id="mdOpen" href="#">Open patient</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-    .status-updating {
-        opacity: 0.7;
-        background-color: #fff3e0 !important;
-        color: #ef6c00 !important;
-    }
-</style>
-
+{% block scripts %}
 <script>
-// Global variables
-let currentNotificationId = null;
-let eventSource = null;
-let socket = null;
+let currentNid = null;
+const SYMBOL = {critical: '!', very_urgent: '!!', urgent: '•'};
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    initializeSSE();
-    setupModalEvents();
-    initializeStatusUpdates();
-    initializeSocketIO();
+function bumpStat(id, d) { const el = document.getElementById(id); if (el) el.textContent = Math.max(0, (+el.textContent || 0) + d); }
+
+async function showNotification(id) {
+  const res = await fetch(`/notification/${id}`, {credentials: 'same-origin'});
+  if (!res.ok) return;
+  const d = await res.json();
+  currentNid = id;
+  document.getElementById('mdClient').textContent = d.client_name || d.user_name || '';
+  document.getElementById('mdTime').textContent = LC.fmtTime(d.date_time);
+  const u = document.getElementById('mdUrgency');
+  u.textContent = (d.urgency || 'normal').replace('_', ' ');
+  u.className = 'urgency ' + (d.urgency || 'normal');
+  document.getElementById('mdNote').textContent = d.note || '';
+  document.getElementById('mdOpen').href = '/client/' + d.client_id;
+  document.getElementById('notificationModal').classList.add('open');
+}
+function closeModal() { document.getElementById('notificationModal').classList.remove('open'); }
+
+async function markRead() {
+  if (!currentNid) return;
+  try {
+    await LC.post(`/notification/${currentNid}/hide`);
+    const b = document.querySelector(`.notification-badge[data-nid="${currentNid}"]`);
+    if (b) {
+      if (b.classList.contains('critical') || b.classList.contains('very_urgent')) bumpStat('statCritical', -1);
+      b.remove(); bumpStat('statAlerts', -1);
+    }
+    closeModal();
+  } catch (e) { LC.toast('Could not update: ' + e.message); }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.notification-badge');
+  if (b) showNotification(b.dataset.nid);
+  if (e.target.id === 'notificationModal') closeModal();
 });
 
-function initializeStatusUpdates() {
-    // Status updates will be handled via SocketIO
-    console.log("🔄 Initializing real-time status updates...");
-}
-
-function initializeSSE() {
-    // Close existing connection if any
-    if (eventSource) {
-        eventSource.close();
-    }
-
-    // Create new SSE connection
-    eventSource = new EventSource("{{ url_for('stream') }}");
-
-    eventSource.onmessage = function(e) {
-        console.log("SSE Message received:", e.data);
-        const data = JSON.parse(e.data);
-        
-        if (data.type === 'new_notification') {
-            handleNewNotification(data.data);
-        }
-    };
-
-    eventSource.onerror = function(e) {
-        console.error("SSE Error:", e);
-        // Attempt reconnect after 3 seconds
-        setTimeout(initializeSSE, 3000);
-    };
-}
-
-function initializeSocketIO() {
-    try {
-        console.log('🔄 Initializing SocketIO connection...');
-        socket = io();
-        
-        socket.on('connect', function() {
-            console.log('✅ Connected to server via WebSocket');
-        });
-        
-        socket.on('disconnect', function() {
-            console.log('❌ Disconnected from server');
-        });
-        
-        socket.on('connect_error', function(error) {
-            console.error('❌ WebSocket connection error:', error);
-        });
-        
-        socket.on('error', function(error) {
-            console.error('❌ WebSocket error:', error);
-        });
-        
-        socket.on('reconnect', function() {
-            console.log('✅ WebSocket reconnected');
-        });
-        
-        socket.on('reconnect_attempt', function() {
-            console.log('🔄 Attempting to reconnect WebSocket...');
-        });
-        
-        // Handle real-time client status updates
-        socket.on('client_status_update', function(data) {
-            console.log('📡 Received status update:', data);
-            updateClientStatus(data.client_cpr, data.status);
-        });
-        
-        // Handle medicine updates
-        socket.on('medicine_updated', function(data) {
-            console.log('💊 Received medicine update for client:', data.client_cpr);
-            // Show a subtle notification without affecting status
-            showMedicineUpdateNotification(data.client_cpr);
-        });
-        
-        // Handle new notifications
-        socket.on('new_notification', function(data) {
-            updateNotificationBadge(data);
-        });
-        
-        // Handle data updates
-        socket.on('data_updated', function(data) {
-            if (data.update_type === 'full_sync') {
-                fetchClientData(data.client_id);
-            }
-            if (data.update_type === 'medicines_updated') {
-                fetchUpdatedData(data.client_id, 'medicines');
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Failed to initialize SocketIO:', error);
-        // Retry connection after 5 seconds
-        setTimeout(initializeSocketIO, 5000);
-    }
-}
-
-function showMedicineUpdateNotification(clientCPR) {
-    // Find the client row
-    const rows = document.querySelectorAll('tr[data-client-id]');
-    rows.forEach(row => {
-        const cprCell = row.querySelector('td:nth-child(2)'); // CPR is 2nd column
-        if (cprCell && cprCell.textContent.trim() === clientCPR) {
-            // Add a subtle visual indicator for medicine update
-            const statusCell = row.querySelector('td:nth-child(5)'); // Status is 5th column
-            if (statusCell) {
-                const originalContent = statusCell.innerHTML;
-                
-                // Add a temporary medicine update indicator
-                statusCell.innerHTML = originalContent + ' <span class="medicine-update-indicator">💊</span>';
-                
-                // Remove the indicator after 3 seconds
-                setTimeout(() => {
-                    if (statusCell.innerHTML.includes('medicine-update-indicator')) {
-                        statusCell.innerHTML = originalContent;
-                    }
-                }, 3000);
-                
-                // Briefly highlight the row
-                highlightRow(row);
-            }
-        }
-    });
-}
-
-function handleNewNotification(notificationData) {
-    const clientRow = document.querySelector(`tr[data-client-id="${notificationData.client_id}"]`);
-    if (!clientRow) return;
-
-    let badgeCell = clientRow.querySelector('.notification-cell');
-    if (!badgeCell) {
-        badgeCell = document.createElement('td');
-        badgeCell.className = 'notification-cell';
-        // Insert before actions column
-        const actionsCell = clientRow.querySelector('.actions');
-        clientRow.insertBefore(badgeCell, actionsCell);
-    }
-
-    // Create new badge
-    const newBadge = document.createElement('div');
-    newBadge.className = `notification-badge ${notificationData.urgency}`;
-    newBadge.innerHTML = getUrgencySymbol(notificationData.urgency);
-    newBadge.onclick = () => showNotificationModal(notificationData.id);
-    newBadge.title = `${notificationData.note} (${new Date(notificationData.date_time).toLocaleString()})`;
-
-    // Add to DOM
-    badgeCell.insertBefore(newBadge, badgeCell.firstChild);
-    
-    // Highlight row
-    clientRow.classList.add('highlight-row');
-    setTimeout(() => {
-        clientRow.classList.remove('highlight-row');
-    }, 1500);
-}
-
-function getUrgencySymbol(urgency) {
-    switch(urgency) {
-        case 'critical': return '!';
-        case 'very_urgent': return '!!';
-        case 'urgent': return '•';
-        default: return '';
-    }
-}
-
-function setupModalEvents() {
-    // Close modal when clicking X
-    document.querySelector('.close').onclick = closeNotificationModal;
-    
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        if (event.target == document.getElementById('notificationModal')) {
-            closeNotificationModal();
-        }
-    };
-}
-
-function showNotificationModal(id) {
-    fetch(`/notification/${id}`)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('notificationDetails').innerHTML = `
-                <p><strong>Client:</strong> ${data.user_name}</p>
-                <p><strong>Time:</strong> ${new Date(data.date_time).toLocaleString()}</p>
-                <p><strong>Urgency:</strong> ${data.urgency.replace('_', ' ')}</p>
-                <p><strong>Message:</strong> ${data.note}</p>
-            `;
-            currentNotificationId = id;
-            document.getElementById('notificationModal').style.display = 'block';
-        })
-        .catch(error => {
-            console.error("Error fetching notification:", error);
-        });
-}
-
-function closeNotificationModal() {
-    document.getElementById('notificationModal').style.display = 'none';
-}
-
-function markNotificationAsRead() {
-    if (!currentNotificationId) return;
-
-    fetch(`/notification/${currentNotificationId}/hide`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            // Remove the notification badge
-            const badge = document.querySelector(`.notification-badge[onclick*="showNotificationModal(${currentNotificationId})"]`);
-            if (badge) {
-                badge.remove();
-            }
-            closeNotificationModal();
-        }
-    })
-    .catch(error => {
-        console.error("Error marking notification as read:", error);
-    });
-}
-
-// Real-time status update functions
-function updateClientStatus(clientCPR, status) {
-    console.log(`🔄 Updating status for client ${clientCPR} to ${status}`);
-    
-    const rows = document.querySelectorAll('tr[data-client-id]');
-    let updated = false;
-    
-    rows.forEach(row => {
-        const cprCell = row.querySelector('td:nth-child(2)'); // CPR is 2nd column
-        if (cprCell && cprCell.textContent.trim() === clientCPR) {
-            const statusCell = row.querySelector('td:nth-child(5)'); // Status is 5th column
-            if (statusCell) {
-                // Remove any medicine update indicator
-                const cleanContent = statusCell.innerHTML.replace(/<span class="medicine-update-indicator">💊<\/span>/, '');
-                
-                if (status === 'online') {
-                    statusCell.innerHTML = '<span class="status-indicator online">🟢 Online</span>';
-                    console.log(`✅ Updated ${clientCPR} to online`);
-                } else {
-                    statusCell.innerHTML = '<span class="status-indicator offline">🔴 Offline</span>';
-                    console.log(`✅ Updated ${clientCPR} to offline`);
-                }
-                highlightRow(row);
-                updated = true;
-            }
-        }
-    });
-    
-    if (!updated) {
-        console.log(`❌ Could not find client row for CPR: ${clientCPR}`);
-    }
-}
-
-function highlightRow(row) {
-    row.style.animation = 'none';
-    void row.offsetWidth; // Trigger reflow
-    row.style.animation = 'highlight 1s';
-}
-
-function fetchUpdatedData(clientId, dataType) {
-    fetch(`/api/client/${clientId}/${dataType}`)
-        .then(response => response.json())
-        .then(data => {
-            const row = document.querySelector(`tr[data-client-id="${clientId}"]`);
-            if (row) {
-                // Update specific parts of the row
-                if (dataType === 'medicines') {
-                    const cell = row.querySelector('.medicines-cell');
-                    if (cell) {
-                        cell.innerHTML = data.map(m => 
-                            `<div>${m.name} (${m.side_effect})</div>`
-                        ).join('');
-                    }
-                }
-                highlightRow(row);
-            }
-        });
-}
-
-// Modified notification handler
-function updateNotificationBadge(data) {
-    const row = document.querySelector(`tr[data-client-id="${data.client_id}"]`);
-    if (!row) return;
-    
-    let badgeCell = row.querySelector('.notification-cell');
-    if (!badgeCell) {
-        badgeCell = document.createElement('td');
-        badgeCell.className = 'notification-cell';
-        // Insert before actions column
-        const actionsCell = row.querySelector('.actions');
-        row.insertBefore(badgeCell, actionsCell);
-    }
-    
-    const urgencyClass = data.notification.urgency.replace('_', '-');
-    const newBadge = document.createElement('div');
-    newBadge.className = `notification-badge ${urgencyClass}`;
-    newBadge.onclick = () => showNotificationModal(data.notification.id);
-    newBadge.title = `${data.notification.note} (${new Date(data.notification.date_time).toLocaleString()})`;
-    newBadge.innerHTML = data.notification.urgency === 'critical' ? '!' : 
-                         data.notification.urgency === 'very_urgent' ? '!!' : '•';
-    
-    badgeCell.prepend(newBadge);
-    highlightRow(row);
-}
-
-// Auto-refresh status every 60 seconds as fallback (optional)
-function startStatusRefresh() {
-    setInterval(() => {
-        console.log("🔄 Auto-refreshing dashboard as fallback...");
-        window.location.reload();
-    }, 60000); // 60 seconds
-}
-
-// Uncomment the line below if you want to enable auto-refresh fallback
-// startStatusRefresh();
-</script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script>
-// Initialize SocketIO connection with better error handling
-let socket;
-
-function initializeSocketIO() {
-    try {
-        socket = io();
-        
-        socket.on('connect', function() {
-            console.log('✅ Connected to server via WebSocket');
-        });
-        
-        socket.on('disconnect', function() {
-            console.log('❌ Disconnected from server');
-        });
-        
-        socket.on('connect_error', function(error) {
-            console.error('❌ WebSocket connection error:', error);
-        });
-        
-        // Handle real-time client status updates
-        socket.on('client_status_update', function(data) {
-            console.log('📡 Received status update:', data);
-            updateClientStatus(data.client_cpr, data.status);
-        });
-        
-        // Handle new notifications
-        socket.on('new_notification', function(data) {
-            updateNotificationBadge(data);
-        });
-        
-        // Handle data updates
-        socket.on('data_updated', function(data) {
-            if (data.update_type === 'full_sync') {
-                fetchClientData(data.client_id);
-            }
-            if (data.update_type === 'medicines_updated') {
-                fetchUpdatedData(data.client_id, 'medicines');
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Failed to initialize SocketIO:', error);
-    }
-}
-
-// Initialize SocketIO when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeSocketIO();
+document.getElementById('search').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('#clientTable tbody tr[data-search]').forEach(tr => {
+    tr.style.display = !q || tr.dataset.search.includes(q) ? '' : 'none';
+  });
 });
 
-function fetchUpdatedData(clientId, dataType) {
-    fetch(`/api/client/${clientId}/${dataType}`)
-        .then(response => response.json())
-        .then(data => {
-            const row = document.querySelector(`tr[data-client-id="${clientId}"]`);
-            if (row) {
-                // Update specific parts of the row
-                if (dataType === 'medicines') {
-                    const cell = row.querySelector('.medicines-cell');
-                    if (cell) {
-                        cell.innerHTML = data.map(m => 
-                            `<div>${m.name} (${m.side_effect})</div>`
-                        ).join('');
-                    }
-                }
-                highlightRow(row);
-            }
-        });
-}
+function rowByCpr(cpr) { return document.querySelector(`tr[data-cpr="${CSS.escape(cpr)}"]`); }
+function flash(row) { row.classList.remove('highlight-row'); void row.offsetWidth; row.classList.add('highlight-row'); }
 
-// Modified notification handler
-function updateNotificationBadge(data) {
-    const row = document.querySelector(`tr[data-client-id="${data.client_id}"]`);
-    if (!row) return;
-    
-    let badgeCell = row.querySelector('.notification-cell');
-    if (!badgeCell) {
-        badgeCell = document.createElement('td');
-        badgeCell.className = 'notification-cell';
-        // Insert before actions column
-        const actionsCell = row.querySelector('.actions');
-        row.insertBefore(badgeCell, actionsCell);
-    }
-    
-    const urgencyClass = data.notification.urgency.replace('_', '-');
-    const newBadge = document.createElement('div');
-    newBadge.className = `notification-badge ${urgencyClass}`;
-    newBadge.onclick = () => showNotificationModal(data.notification.id);
-    newBadge.title = `${data.notification.note} (${new Date(data.notification.date_time).toLocaleString()})`;
-    newBadge.innerHTML = data.notification.urgency === 'critical' ? '!' : 
-                         data.notification.urgency === 'very_urgent' ? '!!' : '•';
-    
-    badgeCell.prepend(newBadge);
-    highlightRow(row);
-}
+LC.on('client_status_update', data => {
+  const row = rowByCpr(data.client_cpr);
+  if (!row) return;
+  const pill = row.querySelector('.status-cell .pill');
+  const online = data.status === 'online';
+  if (pill.classList.contains('online') !== online) bumpStat('statOnline', online ? 1 : -1);
+  pill.className = 'pill ' + (online ? 'online' : 'offline');
+  pill.textContent = online ? 'Online' : 'Offline';
+  flash(row);
+});
+
+LC.on('new_notification', data => {
+  const row = document.querySelector(`tr[data-client-id="${data.client_id}"]`);
+  if (!row) return;
+  const n = data.notification;
+  const cell = row.querySelector('.notification-cell');
+  const dash = cell.querySelector('.muted'); if (dash && dash.textContent === '—') dash.remove();
+  const b = document.createElement('span');
+  b.className = 'notification-badge ' + n.urgency;
+  b.dataset.nid = n.id;
+  b.title = `${n.note} (${LC.fmtTime(n.date_time)})`;
+  b.textContent = SYMBOL[n.urgency] || '✓';
+  cell.prepend(b);
+  bumpStat('statAlerts', 1);
+  if (n.urgency === 'critical' || n.urgency === 'very_urgent') { bumpStat('statCritical', 1); row.classList.add('row-critical'); }
+  flash(row);
+});
+
+LC.on('vitals_update', data => {
+  const row = document.querySelector(`tr[data-client-id="${data.client_id}"]`);
+  if (!row) return;
+  const v = data.vitals, parts = [];
+  if (v.spo2 != null) parts.push(`<span>SpO₂ <b>${Math.round(v.spo2)}%</b></span>`);
+  if (v.pulse != null) parts.push(`<span>♥ <b>${Math.round(v.pulse)}</b></span>`);
+  if (v.temp_object != null) parts.push(`<span>🌡 <b>${v.temp_object.toFixed(1)}°</b></span>`);
+  row.querySelector('.vitals-cell').innerHTML =
+    `<div class="vitals-inline">${parts.join('')}</div><div class="muted" style="font-size:.78rem">${LC.escape(LC.fmtTime(v.ts))}</div>`;
+});
 </script>
 {% endblock %}
